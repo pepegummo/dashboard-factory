@@ -36,8 +36,15 @@ const loading = ref(false)
 const saving = ref(false)
 const error = ref('')
 
+const activeTab = ref<'settings' | 'widgets' | 'config'>('settings')
+
 const selectedId = ref<string | null>(null)
 const selectedElementKey = ref<string | null>(null)
+
+const WIDGET_TYPE_COLORS: Record<string, string> = {
+  gauge: '#0d6efd', line: '#0dcaf0', kpi: '#198754',
+  status: '#fd7e14', table: '#6c757d', bar: '#6610f2',
+}
 const gridEl = ref<HTMLElement | null>(null)
 let grid: GridStack | null = null
 let resizeObserver: ResizeObserver | null = null
@@ -241,6 +248,7 @@ function setItemRef(id: string, el: Element | ComponentPublicInstance | null) {
 function selectWidget(id: string) {
   selectedId.value = id
   selectedElementKey.value = null
+  activeTab.value = 'config'
   const w = form.widgets.find((w) => w.id === id)
   if (w && !w.elements?.length && DEFAULT_ELEMENTS[w.type]) {
     updateWidgetElements(w.id, DEFAULT_ELEMENTS[w.type]!.map((e) => ({ ...e })))
@@ -379,310 +387,621 @@ async function save() {
 </script>
 
 <template>
-  <div>
-    <div class="d-flex justify-content-between align-items-center mb-4">
-      <div>
-        <h1 class="h3 mb-1">{{ isEdit ? 'Edit Template' : 'New Template' }}</h1>
-        <p class="text-muted mb-0">
-          Design the widget board that will be applied to each machine page.
-        </p>
+  <!-- Loading -->
+  <div v-if="loading" class="text-center py-5">
+    <div class="spinner-border text-primary" role="status"></div>
+  </div>
+
+  <div v-else class="editor-page">
+    <!-- ── Page header ── -->
+    <div class="editor-page-header">
+      <div class="d-flex justify-content-between align-items-center">
+        <div>
+          <h1 class="h3 mb-1">{{ isEdit ? 'Edit Template' : 'New Template' }}</h1>
+          <p class="text-muted mb-0">
+            Design the widget board that will be applied to each machine page.
+          </p>
+        </div>
+        <RouterLink class="btn btn-outline-secondary btn-sm" to="/templates">
+          <i class="bi bi-arrow-left me-1"></i>Back
+        </RouterLink>
       </div>
-      <RouterLink class="btn btn-outline-secondary" to="/templates">
-        <i class="bi bi-arrow-left me-1"></i>Back
-      </RouterLink>
+      <div v-if="error" class="alert alert-danger mt-3 mb-0 py-2">{{ error }}</div>
     </div>
 
-    <div v-if="loading" class="text-center py-5">
-      <div class="spinner-border text-primary" role="status"></div>
-    </div>
+    <!-- ── Editor layout: sidebar + canvas ── -->
+    <div class="editor-layout">
 
-    <template v-else>
-      <div v-if="error" class="alert alert-danger">{{ error }}</div>
+      <!-- Left sidebar -->
+      <aside class="editor-sidebar">
 
-      <div class="row g-3">
-        <div class="col-12 col-lg-3">
-          <div class="card shadow-sm mb-3">
-            <div class="card-body">
-              <div class="mb-3">
-                <label class="form-label">Template name</label>
+        <!-- Tab bar -->
+        <div class="sidebar-tabs">
+          <button
+            type="button"
+            class="sidebar-tab"
+            :class="{ 'sidebar-tab--active': activeTab === 'settings' }"
+            @click="activeTab = 'settings'"
+          >
+            <i class="bi bi-gear me-1"></i>Settings
+          </button>
+          <button
+            type="button"
+            class="sidebar-tab"
+            :class="{ 'sidebar-tab--active': activeTab === 'widgets' }"
+            @click="activeTab = 'widgets'"
+          >
+            <i class="bi bi-grid me-1"></i>Widgets
+            <span v-if="form.widgets.length" class="sidebar-tab-count">{{ form.widgets.length }}</span>
+          </button>
+          <button
+            type="button"
+            class="sidebar-tab"
+            :class="{ 'sidebar-tab--active': activeTab === 'config', 'sidebar-tab--dim': !selectedWidget }"
+            @click="activeTab = 'config'"
+          >
+            <i class="bi bi-sliders me-1"></i>Config
+          </button>
+        </div>
+
+        <!-- Tab panels -->
+        <div class="editor-sidebar-body">
+
+          <!-- ── Settings tab ── -->
+          <div v-show="activeTab === 'settings'" class="sidebar-panel">
+            <div class="mb-3">
+              <label class="form-label form-label-sm">Name</label>
+              <input
+                v-model="form.name"
+                type="text"
+                class="form-control form-control-sm"
+                placeholder="e.g. Standard Machine Monitor"
+              />
+            </div>
+            <div class="mb-3">
+              <label class="form-label form-label-sm">Description</label>
+              <textarea
+                v-model="form.description"
+                class="form-control form-control-sm"
+                rows="2"
+                placeholder="Optional"
+              ></textarea>
+            </div>
+            <div class="mb-3">
+              <label class="form-label form-label-sm mb-1">Canvas ratio</label>
+              <div class="d-flex align-items-center gap-2">
                 <input
-                  v-model="form.name"
-                  type="text"
-                  class="form-control"
-                  placeholder="e.g. Standard Machine Monitor"
+                  v-model.number="canvasWidthInput"
+                  type="number" min="1" max="999"
+                  class="form-control form-control-sm"
+                  style="width: 4rem"
+                />
+                <span class="text-muted small">:</span>
+                <input
+                  v-model.number="canvasHeightInput"
+                  type="number" min="1" max="999"
+                  class="form-control form-control-sm"
+                  style="width: 4rem"
                 />
               </div>
-              <div class="mb-3">
-                <label class="form-label">Description</label>
-                <textarea
-                  v-model="form.description"
-                  class="form-control"
-                  rows="2"
-                  placeholder="Optional description"
-                ></textarea>
+              <p class="form-text mb-0">Width : height, e.g. 16 : 9</p>
+            </div>
+            <div>
+              <label class="form-label form-label-sm mb-1">Grid snap</label>
+              <div class="d-flex align-items-center gap-2">
+                <input
+                  v-model.number="form.gridCols"
+                  type="number" min="1" max="1000"
+                  class="form-control form-control-sm"
+                  style="width: 4rem"
+                />
+                <span class="text-muted small">×</span>
+                <input
+                  v-model.number="form.gridRows"
+                  type="number" min="1" max="1000"
+                  class="form-control form-control-sm"
+                  style="width: 4rem"
+                />
               </div>
-              <div>
-                <label class="form-label mb-1">Canvas ratio</label>
-                <div class="d-flex align-items-center gap-2">
-                  <input
-                    v-model.number="canvasWidthInput"
-                    type="number"
-                    min="1"
-                    max="999"
-                    class="form-control form-control-sm"
-                    style="width: 4rem"
-                  />
-                  <span class="text-muted">:</span>
-                  <input
-                    v-model.number="canvasHeightInput"
-                    type="number"
-                    min="1"
-                    max="999"
-                    class="form-control form-control-sm"
-                    style="width: 4rem"
-                  />
-                </div>
-                <p class="form-text small text-muted mb-0">
-                  Width : height ratio of the output canvas, e.g. 16 : 9.
-                  The editor board always displays as a square.
-                </p>
-              </div>
-              <div class="mt-3">
-                <label class="form-label mb-1">Grid constraints</label>
-                <div class="d-flex align-items-center gap-2">
-                  <input
-                    v-model.number="form.gridCols"
-                    type="number"
-                    min="1"
-                    max="1000"
-                    class="form-control form-control-sm"
-                    style="width: 4rem"
-                  />
-                  <span class="text-muted">×</span>
-                  <input
-                    v-model.number="form.gridRows"
-                    type="number"
-                    min="1"
-                    max="1000"
-                    class="form-control form-control-sm"
-                    style="width: 4rem"
-                  />
-                </div>
-                <p class="form-text small text-muted mb-0">
-                  Snap columns × rows. Higher = finer precision.
-                </p>
-              </div>
+              <p class="form-text mb-0">Cols × rows — higher = finer precision</p>
             </div>
           </div>
 
-          <div class="card shadow-sm mb-3">
-            <div class="card-header bg-white">
-              <strong>Add widget</strong>
-            </div>
-            <div class="card-body d-flex flex-wrap gap-2">
+          <!-- ── Widgets tab ── -->
+          <div v-show="activeTab === 'widgets'" class="sidebar-panel">
+            <div class="sidebar-group-title">Add</div>
+            <div class="d-flex flex-wrap gap-2 mb-4">
               <button
                 v-for="opt in widgetTypeOptions"
                 :key="opt.value"
                 type="button"
                 class="btn btn-sm btn-outline-primary"
                 :disabled="!canAddWidget[opt.value]"
-                :title="canAddWidget[opt.value] ? '' : 'Not enough space on the canvas for this widget'"
+                :title="canAddWidget[opt.value] ? '' : 'Not enough canvas space'"
                 @click="addWidget(opt.value)"
               >
                 <i :class="['bi', opt.icon, 'me-1']"></i>{{ opt.label }}
               </button>
             </div>
+
+            <div class="sidebar-group-title">On canvas</div>
+            <div v-if="form.widgets.length" class="widget-layer-list">
+              <button
+                v-for="w in form.widgets"
+                :key="w.id"
+                type="button"
+                class="widget-layer-item"
+                :class="{ 'widget-layer-item--active': selectedId === w.id }"
+                @click="selectWidget(w.id)"
+              >
+                <span
+                  class="widget-layer-dot"
+                  :style="{ backgroundColor: WIDGET_TYPE_COLORS[w.type] ?? '#6c757d' }"
+                ></span>
+                <span class="widget-layer-name">{{ w.title || '(untitled)' }}</span>
+                <span class="widget-layer-type">{{ w.type }}</span>
+                <button
+                  type="button"
+                  class="widget-layer-remove btn btn-sm"
+                  title="Remove"
+                  @click.stop="removeWidget(w.id)"
+                >
+                  <i class="bi bi-x"></i>
+                </button>
+              </button>
+            </div>
+            <p v-else class="text-muted small mb-0">No widgets yet. Add one above.</p>
           </div>
 
-          <div class="card shadow-sm">
-            <div class="card-header bg-white">
-              <strong>Widget properties</strong>
-            </div>
-            <div class="card-body">
-              <div v-if="selectedWidget && selectedElementKey !== null" class="alert alert-info py-1 px-2 small mb-2">
-                <i class="bi bi-arrows-move me-1"></i>Drag the handle to reposition. Click the element row to deselect.
+          <!-- ── Config tab ── -->
+          <div v-show="activeTab === 'config'" class="sidebar-panel">
+            <template v-if="selectedWidget">
+              <div class="d-flex align-items-center gap-2 mb-3">
+                <span
+                  class="widget-type-pill"
+                  :style="{ backgroundColor: WIDGET_TYPE_COLORS[selectedWidget.type] ?? '#6c757d' }"
+                >{{ selectedWidget.type }}</span>
+                <span class="text-muted small">{{ selectedWidget.title }}</span>
               </div>
-              <template v-if="selectedWidget">
-                <div class="mb-2">
-                  <label class="form-label small text-muted mb-1">Title</label>
-                  <input v-model="selectedWidget.title" type="text" class="form-control form-control-sm" />
+
+              <div v-if="selectedElementKey !== null" class="alert alert-info py-1 px-2 small mb-2">
+                <i class="bi bi-arrows-move me-1"></i>Drag handle to reposition. Click row to deselect.
+              </div>
+
+              <div class="mb-2">
+                <label class="form-label form-label-sm text-muted mb-1">Title</label>
+                <input v-model="selectedWidget.title" type="text" class="form-control form-control-sm" />
+              </div>
+              <div class="mb-2">
+                <label class="form-label form-label-sm text-muted mb-1">Type</label>
+                <select
+                  v-model="selectedWidget.type"
+                  class="form-select form-select-sm"
+                  @change="onTypeChange(selectedWidget)"
+                >
+                  <option v-for="opt in widgetTypeOptions" :key="opt.value" :value="opt.value">
+                    {{ opt.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="mb-2">
+                <label class="form-label form-label-sm text-muted mb-1">Metric</label>
+                <select
+                  v-model="selectedWidget.metricKey"
+                  class="form-select form-select-sm"
+                  :disabled="selectedWidget.type === 'table'"
+                >
+                  <option v-for="m in catalog.metrics" :key="m.key" :value="m.key">
+                    {{ m.label }}{{ m.unit ? ` (${m.unit})` : '' }}
+                  </option>
+                </select>
+              </div>
+              <div class="row g-2 mb-3">
+                <div class="col-6">
+                  <label class="form-label form-label-sm text-muted mb-1">Width (%)</label>
+                  <input
+                    v-model.number="widthInput"
+                    type="number" min="1" max="100"
+                    class="form-control form-control-sm"
+                  />
                 </div>
-                <div class="mb-2">
-                  <label class="form-label small text-muted mb-1">Widget type</label>
-                  <select
-                    v-model="selectedWidget.type"
-                    class="form-select form-select-sm"
-                    @change="onTypeChange(selectedWidget)"
+                <div class="col-6">
+                  <label class="form-label form-label-sm text-muted mb-1">Height (%)</label>
+                  <input
+                    v-model.number="heightInput"
+                    type="number" min="1" max="100"
+                    class="form-control form-control-sm"
+                  />
+                </div>
+              </div>
+
+              <!-- Element positions -->
+              <template v-if="selectedWidgetElements.length">
+                <hr class="my-2" />
+                <label class="form-label form-label-sm text-muted mb-1">
+                  <i class="bi bi-layout-three-columns me-1"></i>Elements
+                </label>
+                <div
+                  v-for="el in selectedWidgetElements"
+                  :key="el.key"
+                  class="mb-1 border rounded"
+                >
+                  <button
+                    type="button"
+                    class="btn btn-sm w-100 text-start px-2 py-1 d-flex align-items-center justify-content-between"
+                    :class="selectedElementKey === el.key ? 'btn-primary' : 'btn-light'"
+                    @click="selectElement(el.key)"
                   >
-                    <option v-for="opt in widgetTypeOptions" :key="opt.value" :value="opt.value">
-                      {{ opt.label }}
-                    </option>
-                  </select>
-                </div>
-                <div class="mb-2">
-                  <label class="form-label small text-muted mb-1">Metric</label>
-                  <select
-                    v-model="selectedWidget.metricKey"
-                    class="form-select form-select-sm"
-                    :disabled="selectedWidget.type === 'table'"
-                  >
-                    <option v-for="m in catalog.metrics" :key="m.key" :value="m.key">
-                      {{ m.label }}{{ m.unit ? ` (${m.unit})` : '' }}
-                    </option>
-                  </select>
-                </div>
-                <div class="row g-2 mb-3">
-                  <div class="col-6">
-                    <label class="form-label small text-muted mb-1">Width (%)</label>
-                    <input
-                      v-model.number="widthInput"
-                      type="number"
-                      min="1"
-                      max="100"
-                      class="form-control form-control-sm"
-                    />
-                  </div>
-                  <div class="col-6">
-                    <label class="form-label small text-muted mb-1">Height (%)</label>
-                    <input
-                      v-model.number="heightInput"
-                      type="number"
-                      min="1"
-                      max="100"
-                      class="form-control form-control-sm"
-                    />
-                  </div>
-                </div>
-                <!-- Element positions list -->
-                <template v-if="selectedWidgetElements.length">
-                  <hr class="my-2" />
-                  <label class="form-label small text-muted mb-1">
-                    <i class="bi bi-layout-three-columns me-1"></i>Elements
-                  </label>
-                  <div
-                    v-for="el in selectedWidgetElements"
-                    :key="el.key"
-                    class="mb-1 border rounded"
-                  >
-                    <button
-                      type="button"
-                      class="btn btn-sm w-100 text-start px-2 py-1 d-flex align-items-center justify-content-between"
-                      :class="selectedElementKey === el.key ? 'btn-primary' : 'btn-light'"
-                      @click="selectElement(el.key)"
-                    >
-                      <span class="text-capitalize small fw-semibold">{{ el.key }}</span>
-                      <i :class="['bi', selectedElementKey === el.key ? 'bi-chevron-up' : 'bi-chevron-down']"></i>
-                    </button>
-                    <div v-if="selectedElementKey === el.key" class="p-2">
-                      <div class="row g-1">
-                        <div class="col-6">
-                          <label class="form-text mb-0">X %</label>
-                          <input type="number" min="0" max="99" class="form-control form-control-sm"
-                            :value="el.x"
-                            @change="updateElementProp(el.key, 'x', Number(($event.target as HTMLInputElement).value))"
-                          />
-                        </div>
-                        <div class="col-6">
-                          <label class="form-text mb-0">Y %</label>
-                          <input type="number" min="0" max="99" class="form-control form-control-sm"
-                            :value="el.y"
-                            @change="updateElementProp(el.key, 'y', Number(($event.target as HTMLInputElement).value))"
-                          />
-                        </div>
-                        <div class="col-6">
-                          <label class="form-text mb-0">W %</label>
-                          <input type="number" min="1" max="100" class="form-control form-control-sm"
-                            :value="el.w"
-                            @change="updateElementProp(el.key, 'w', Number(($event.target as HTMLInputElement).value))"
-                          />
-                        </div>
-                        <div class="col-6">
-                          <label class="form-text mb-0">H %</label>
-                          <input type="number" min="1" max="100" class="form-control form-control-sm"
-                            :value="el.h"
-                            @change="updateElementProp(el.key, 'h', Number(($event.target as HTMLInputElement).value))"
-                          />
-                        </div>
+                    <span class="text-capitalize small fw-semibold">{{ el.key }}</span>
+                    <i :class="['bi', selectedElementKey === el.key ? 'bi-chevron-up' : 'bi-chevron-down']"></i>
+                  </button>
+                  <div v-if="selectedElementKey === el.key" class="p-2">
+                    <div class="row g-1">
+                      <div class="col-6">
+                        <label class="form-text mb-0">X %</label>
+                        <input type="number" min="0" max="99" class="form-control form-control-sm"
+                          :value="el.x"
+                          @change="updateElementProp(el.key, 'x', Number(($event.target as HTMLInputElement).value))"
+                        />
+                      </div>
+                      <div class="col-6">
+                        <label class="form-text mb-0">Y %</label>
+                        <input type="number" min="0" max="99" class="form-control form-control-sm"
+                          :value="el.y"
+                          @change="updateElementProp(el.key, 'y', Number(($event.target as HTMLInputElement).value))"
+                        />
+                      </div>
+                      <div class="col-6">
+                        <label class="form-text mb-0">W %</label>
+                        <input type="number" min="1" max="100" class="form-control form-control-sm"
+                          :value="el.w"
+                          @change="updateElementProp(el.key, 'w', Number(($event.target as HTMLInputElement).value))"
+                        />
+                      </div>
+                      <div class="col-6">
+                        <label class="form-text mb-0">H %</label>
+                        <input type="number" min="1" max="100" class="form-control form-control-sm"
+                          :value="el.h"
+                          @change="updateElementProp(el.key, 'h', Number(($event.target as HTMLInputElement).value))"
+                        />
                       </div>
                     </div>
                   </div>
-                </template>
-
-                <button
-                  v-if="selectedWidget.elements?.length"
-                  class="btn btn-sm btn-outline-secondary w-100 mb-2"
-                  @click="updateWidgetElements(selectedWidget.id, [])"
-                >
-                  <i class="bi bi-arrow-counterclockwise me-1"></i>Reset element layout
-                </button>
-                <button class="btn btn-sm btn-outline-danger w-100" @click="removeWidget(selectedWidget.id)">
-                  <i class="bi bi-trash me-1"></i>Remove widget
-                </button>
+                </div>
               </template>
-              <p v-else class="text-muted small mb-0">
-                Click a widget on the board to edit it, or add a new one above.
-              </p>
+
+              <button
+                v-if="selectedWidget.elements?.length"
+                class="btn btn-sm btn-outline-secondary w-100 mb-2"
+                @click="updateWidgetElements(selectedWidget.id, [])"
+              >
+                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset element layout
+              </button>
+              <button class="btn btn-sm btn-outline-danger w-100" @click="removeWidget(selectedWidget.id)">
+                <i class="bi bi-trash me-1"></i>Remove widget
+              </button>
+            </template>
+
+            <div v-else class="config-empty">
+              <i class="bi bi-cursor display-6 text-muted"></i>
+              <p class="text-muted small mt-2 mb-0">Click a widget on the board to configure it</p>
             </div>
           </div>
+
         </div>
 
-        <div class="col-12 col-lg-9">
-          <div class="card shadow-sm">
-            <div class="card-header bg-white d-flex justify-content-between align-items-center">
-              <strong>Board</strong>
-              <span class="text-muted small">Hover a widget — drag ⠿ to move, ⚙ to configure, drag corner to resize</span>
-            </div>
-            <div class="card-body">
-              <div
-                class="template-canvas"
-                :style="{
-                  aspectRatio: `${form.width} / ${form.height}`,
-                  '--board-cols': form.gridCols,
-                  '--board-rows': form.gridRows,
-                  '--canvas-ratio': canvasRatio,
-                }"
-              >
-                <div ref="gridEl" class="grid-stack">
-                  <div
-                    v-for="w in form.widgets"
-                    :key="w.id"
-                    class="grid-stack-item"
-                    :gs-id="w.id"
-                    :gs-x="w.x >= 0 ? pctToCol(w.x) : undefined"
-                    :gs-y="w.y >= 0 ? pctToRow(w.y) : undefined"
-                    :gs-w="Math.max(1, pctToCol(w.w))"
-                    :gs-h="Math.max(1, pctToRow(w.h))"
-                    :ref="(el) => setItemRef(w.id, el)"
-                  >
-                    <div class="grid-stack-item-content">
-                      <WidgetEditorShell
-                        :widget="w"
-                        :isSelected="selectedId === w.id"
-                        :isElementEditing="selectedId === w.id"
-                        :activeElementKey="selectedId === w.id ? selectedElementKey ?? undefined : undefined"
-                        @select="selectWidget(w.id)"
-                        @remove="removeWidget(w.id)"
-                        @update-elements="updateWidgetElements(w.id, $event)"
-                        @select-element="selectElement($event)"
-                      >
-                        <WidgetRenderer :widget="w" :readings="sampleReadings" :history="sampleHistory" />
-                      </WidgetEditorShell>
-                    </div>
+        <!-- Sticky save footer -->
+        <div class="editor-sidebar-footer">
+          <button class="btn btn-primary btn-sm w-100 mb-2" :disabled="saving" @click="save">
+            <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
+            <i v-else class="bi bi-floppy me-1"></i>
+            {{ saving ? 'Saving…' : 'Save template' }}
+          </button>
+          <RouterLink class="btn btn-outline-secondary btn-sm w-100" to="/templates">
+            Cancel
+          </RouterLink>
+        </div>
+      </aside>
+
+      <!-- Canvas main area -->
+      <main class="editor-main">
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+            <strong>Board</strong>
+            <span class="text-muted small">Hover a widget — drag ⠿ to move, ⚙ to configure, drag corner to resize</span>
+          </div>
+          <div class="card-body p-2 overflow-auto">
+            <div
+              class="template-canvas"
+              :style="{
+                aspectRatio: `${form.width} / ${form.height}`,
+                '--board-cols': form.gridCols,
+                '--board-rows': form.gridRows,
+                '--canvas-ratio': canvasRatio,
+              }"
+            >
+              <div ref="gridEl" class="grid-stack">
+                <div
+                  v-for="w in form.widgets"
+                  :key="w.id"
+                  class="grid-stack-item"
+                  :gs-id="w.id"
+                  :gs-x="w.x >= 0 ? pctToCol(w.x) : undefined"
+                  :gs-y="w.y >= 0 ? pctToRow(w.y) : undefined"
+                  :gs-w="Math.max(1, pctToCol(w.w))"
+                  :gs-h="Math.max(1, pctToRow(w.h))"
+                  :ref="(el) => setItemRef(w.id, el)"
+                >
+                  <div class="grid-stack-item-content">
+                    <WidgetEditorShell
+                      :widget="w"
+                      :isSelected="selectedId === w.id"
+                      :isElementEditing="selectedId === w.id"
+                      :activeElementKey="selectedId === w.id ? selectedElementKey ?? undefined : undefined"
+                      @select="selectWidget(w.id)"
+                      @remove="removeWidget(w.id)"
+                      @update-elements="updateWidgetElements(w.id, $event)"
+                      @select-element="selectElement($event)"
+                    >
+                      <WidgetRenderer :widget="w" :readings="sampleReadings" :history="sampleHistory" />
+                    </WidgetEditorShell>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </main>
 
-      <div class="d-flex gap-2 mt-3">
-        <button class="btn btn-primary" :disabled="saving" @click="save">
-          <span v-if="saving" class="spinner-border spinner-border-sm me-1"></span>
-          Save template
-        </button>
-        <RouterLink class="btn btn-outline-secondary" to="/templates">Cancel</RouterLink>
-      </div>
-    </template>
+    </div>
   </div>
 </template>
+
+<style scoped>
+/* ── Page shell ── */
+.editor-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 56px - 3rem); /* 56px navbar + 3rem page-content padding */
+  margin: -1.5rem;
+}
+
+.editor-page-header {
+  padding: 1rem 1.5rem 0.75rem;
+  border-bottom: 1px solid var(--bs-border-color);
+  background: #fff;
+  flex-shrink: 0;
+}
+
+/* ── Two-column layout ── */
+.editor-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Left sidebar ── */
+.editor-sidebar {
+  width: 280px;
+  min-width: 280px;
+  background: #fff;
+  border-right: 1px solid var(--bs-border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Tab bar */
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--bs-border-color);
+  flex-shrink: 0;
+}
+
+.sidebar-tab {
+  flex: 1;
+  padding: 0.6rem 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--bs-secondary);
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.sidebar-tab:hover {
+  color: var(--bs-body-color);
+}
+
+.sidebar-tab--active {
+  color: var(--bs-primary);
+  border-bottom-color: var(--bs-primary);
+  font-weight: 600;
+}
+
+.sidebar-tab--dim {
+  opacity: 0.5;
+}
+
+.sidebar-tab-count {
+  background: var(--bs-secondary-bg);
+  color: var(--bs-secondary);
+  border-radius: 10px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 0 5px;
+  line-height: 1.4;
+}
+
+.sidebar-tab--active .sidebar-tab-count {
+  background: rgba(var(--bs-primary-rgb), 0.12);
+  color: var(--bs-primary);
+}
+
+/* Tab body */
+.editor-sidebar-body {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.sidebar-panel {
+  padding: 1rem;
+}
+
+.sidebar-group-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--bs-secondary);
+  margin-bottom: 0.6rem;
+}
+
+/* Widget layers list (Widgets tab) */
+.widget-layer-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.widget-layer-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  text-align: left;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.1s;
+}
+
+.widget-layer-item:hover {
+  background: var(--bs-light);
+}
+
+.widget-layer-item--active {
+  background: rgba(var(--bs-primary-rgb), 0.08);
+  border-color: rgba(var(--bs-primary-rgb), 0.2);
+}
+
+.widget-layer-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.widget-layer-name {
+  flex: 1;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.widget-layer-type {
+  font-size: 0.68rem;
+  color: var(--bs-secondary);
+  flex-shrink: 0;
+}
+
+.widget-layer-remove {
+  padding: 0 4px;
+  line-height: 1;
+  color: var(--bs-secondary);
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.widget-layer-item:hover .widget-layer-remove {
+  opacity: 1;
+}
+
+/* Config tab */
+.widget-type-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.config-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.editor-sidebar-footer {
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--bs-border-color);
+  background: #fff;
+  flex-shrink: 0;
+}
+
+/* ── Canvas main area ── */
+.editor-main {
+  flex: 1;
+  overflow: auto;
+  padding: 1rem;
+  background: #f4f6f9;
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-main .card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-main .card-body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── Mobile: stack sidebar above canvas ── */
+@media (max-width: 991.98px) {
+  .editor-page {
+    height: auto;
+  }
+
+  .editor-layout {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .editor-sidebar {
+    width: 100%;
+    min-width: unset;
+    border-right: none;
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  .editor-sidebar-body {
+    max-height: 50vh;
+  }
+
+  .editor-main {
+    padding: 0.75rem;
+    min-height: 60vh;
+  }
+}
+</style>

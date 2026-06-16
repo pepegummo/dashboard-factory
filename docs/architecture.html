@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Builder — Architecture & Data Flow</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0d1117;
+    --surface:   #161b22;
+    --border:    #30363d;
+    --text:      #e6edf3;
+    --muted:     #8b949e;
+    --fe:        #388bfd;   /* frontend blue */
+    --fe-dim:    #1c3a5e;
+    --fe-bg:     #0d2136;
+    --be:        #3fb950;   /* backend green */
+    --be-dim:    #1a4a24;
+    --be-bg:     #0d2318;
+    --db:        #e3b341;   /* database amber */
+    --db-dim:    #5a4200;
+    --db-bg:     #2a1d00;
+    --arrow:     #484f58;
+    --tag-bg:    #21262d;
+    --radius:    8px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 40px 32px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* ── Header ── */
+  header { margin-bottom: 48px; }
+  header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; color: var(--text); }
+  header p  { color: var(--muted); margin-top: 6px; font-size: 13px; }
+
+  /* ── Section titles ── */
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* ── Layer cards ── */
+  .layer {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 4px;
+    position: relative;
+  }
+  .layer-fe  { border-color: var(--fe-dim);  background: var(--fe-bg); }
+  .layer-be  { border-color: var(--be-dim);  background: var(--be-bg); }
+  .layer-db  { border-color: var(--db-dim);  background: var(--db-bg); }
+
+  .layer-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+  }
+  .layer-fe .layer-label { color: var(--fe); }
+  .layer-be .layer-label { color: var(--be); }
+  .layer-db .layer-label { color: var(--db); }
+
+  .layer-subtitle {
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: 8px;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  /* ── Grid of boxes inside a layer ── */
+  .box-grid {
+    display: grid;
+    gap: 10px;
+  }
+  .box-grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .box-grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .box-grid-2 { grid-template-columns: repeat(2, 1fr); }
+
+  .box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+  }
+  .box-title {
+    font-weight: 600;
+    font-size: 12px;
+    margin-bottom: 6px;
+    color: var(--text);
+  }
+  .box ul {
+    list-style: none;
+    padding: 0;
+  }
+  .box ul li {
+    color: var(--muted);
+    font-size: 11px;
+    padding: 1px 0;
+  }
+  .box ul li::before { content: '· '; color: var(--border); }
+
+  .tag {
+    display: inline-block;
+    background: var(--tag-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-family: 'Consolas', 'SF Mono', monospace;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .tag-fe { border-color: var(--fe-dim); color: var(--fe); background: #0d1a2d; }
+  .tag-be { border-color: var(--be-dim); color: var(--be); background: #0d1e12; }
+  .tag-db { border-color: var(--db-dim); color: var(--db); background: #1e1500; }
+
+  /* ── Arrow between layers ── */
+  .layer-arrow {
+    text-align: center;
+    padding: 6px 0;
+    color: var(--arrow);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .layer-arrow span {
+    color: var(--muted);
+    font-size: 10px;
+    font-family: 'Consolas', 'SF Mono', monospace;
+  }
+  .layer-arrow::before,
+  .layer-arrow::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+    max-width: 140px;
+  }
+
+  /* ── Data flow section ── */
+  .flows { display: flex; flex-direction: column; gap: 24px; }
+
+  .flow {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .flow-header {
+    background: var(--surface);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .flow-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .flow-num-1 { background: var(--fe-dim); color: var(--fe); }
+  .flow-num-2 { background: var(--be-dim); color: var(--be); }
+  .flow-num-3 { background: #3a1a4a;       color: #c678dd; }
+  .flow-title { font-weight: 600; font-size: 13px; }
+  .flow-desc  { color: var(--muted); font-size: 11px; margin-left: auto; }
+
+  .flow-steps {
+    padding: 16px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0;
+  }
+
+  .step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  .step-box {
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    border: 1px solid;
+  }
+  .step-box-fe  { background: var(--fe-bg);  border-color: var(--fe-dim);  color: var(--fe); }
+  .step-box-be  { background: var(--be-bg);  border-color: var(--be-dim);  color: var(--be); }
+  .step-box-db  { background: var(--db-bg);  border-color: var(--db-dim);  color: var(--db); }
+  .step-box-usr { background: #1a1025;        border-color: #4a2a6a;        color: #c678dd; }
+  .step-sub {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 4px;
+    font-family: 'Consolas', 'SF Mono', monospace;
+  }
+
+  .step-arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+    margin-bottom: 18px; /* offset for sub-label */
+  }
+  .step-arrow svg { display: block; }
+
+  .step-arrow-label {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0 4px;
+    margin-bottom: 18px;
+    gap: 2px;
+  }
+  .step-arrow-label .arrow-line {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+  .arrow-text {
+    font-size: 9px;
+    color: var(--muted);
+    white-space: nowrap;
+    font-family: 'Consolas', 'SF Mono', monospace;
+  }
+
+  /* ── API table ── */
+  .api-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  .api-table thead tr {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .api-table th {
+    padding: 8px 12px;
+    text-align: left;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .api-table td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .api-table tbody tr:last-child td { border-bottom: none; }
+  .api-table tbody tr:hover { background: var(--surface); }
+
+  .method {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    font-family: 'Consolas', 'SF Mono', monospace;
+    min-width: 46px;
+    text-align: center;
+  }
+  .GET    { background: #0d2318; color: var(--be); border: 1px solid var(--be-dim); }
+  .POST   { background: #0d1a2d; color: var(--fe); border: 1px solid var(--fe-dim); }
+  .PUT    { background: #1e1500; color: var(--db); border: 1px solid var(--db-dim); }
+  .DELETE { background: #2a0d0d; color: #f85149; border: 1px solid #6e1b1b; }
+  .PATCH  { background: #1a1025; color: #c678dd; border: 1px solid #4a2a6a; }
+
+  .route-path {
+    font-family: 'Consolas', 'SF Mono', monospace;
+    color: var(--text);
+    font-size: 12px;
+  }
+  .route-path em {
+    color: var(--db);
+    font-style: normal;
+  }
+
+  .section { margin-bottom: 48px; }
+
+  .table-wrapper {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  /* ── DB schema row ── */
+  .db-tables {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .db-table-chip {
+    background: var(--db-bg);
+    border: 1px solid var(--db-dim);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-family: 'Consolas', 'SF Mono', monospace;
+    color: var(--db);
+  }
+
+  .inline-note {
+    font-size: 10px;
+    color: var(--muted);
+    font-style: italic;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Dashboard Builder — Architecture &amp; Data Flow</h1>
+  <p>Go 1.26 · chi · SQLite &nbsp;/&nbsp; Vue 3 · Pinia · Vite · Bootstrap 5 &nbsp;·&nbsp; <span style="font-family:monospace;font-size:11px;">generated 2026-06-16</span></p>
+</header>
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 1 — ARCHITECTURE
+════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">1 · Architecture</div>
+
+  <!-- FRONTEND LAYER -->
+  <div class="layer layer-fe">
+    <div class="layer-label">
+      Frontend
+      <span class="layer-subtitle">Vue 3 + Vite · localhost:5174</span>
+    </div>
+
+    <div class="box-grid box-grid-3" style="margin-bottom:10px;">
+
+      <div class="box">
+        <div class="box-title">Pages (route-level)</div>
+        <ul>
+          <li>DashboardListPage</li>
+          <li>CreateDashboardPage</li>
+          <li>DashboardViewPage</li>
+          <li>TemplatesPage</li>
+          <li>TemplateEditorPage</li>
+        </ul>
+        <span class="tag tag-fe">src/pages/</span>
+      </div>
+
+      <div class="box">
+        <div class="box-title">Widget Components</div>
+        <ul>
+          <li>WidgetRenderer <span style="color:#484f58">(dispatcher)</span></li>
+          <li>GaugeWidget</li>
+          <li>LineChartWidget</li>
+          <li>KpiWidget</li>
+          <li>StatusWidget</li>
+          <li>TableWidget · BarChartWidget</li>
+        </ul>
+        <span class="tag tag-fe">src/components/widgets/</span>
+      </div>
+
+      <div class="box">
+        <div class="box-title">Editor Components</div>
+        <ul>
+          <li>WidgetEditorShell</li>
+          <li>WidgetElementEditor</li>
+        </ul>
+        <span class="tag tag-fe">src/components/widgets/</span>
+      </div>
+
+    </div>
+
+    <div class="box-grid box-grid-3">
+
+      <div class="box">
+        <div class="box-title">Pinia Stores</div>
+        <ul>
+          <li>catalog.store <span style="color:#484f58">(factories, machines, metrics — fetch-once)</span></li>
+          <li>template.store</li>
+          <li>dashboard.store</li>
+        </ul>
+        <span class="tag tag-fe">src/stores/</span>
+      </div>
+
+      <div class="box">
+        <div class="box-title">Composables</div>
+        <ul>
+          <li>useTelemetry</li>
+          <li style="color:#484f58">polls every 2 s per machine</li>
+          <li style="color:#484f58">keeps 30-point rolling history</li>
+        </ul>
+        <span class="tag tag-fe">src/composables/</span>
+      </div>
+
+      <div class="box">
+        <div class="box-title">Services / Types</div>
+        <ul>
+          <li>api.ts <span style="color:#484f58">(axios, baseURL /api)</span></li>
+          <li>apiErrorMessage helper</li>
+          <li>index.ts <span style="color:#484f58">(TS interfaces)</span></li>
+        </ul>
+        <span class="tag tag-fe">src/services/ · src/types/</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ARROW -->
+  <div class="layer-arrow">
+    <span>HTTP REST · JSON · CORS *</span>
+  </div>
+
+  <!-- BACKEND LAYER -->
+  <div class="layer layer-be">
+    <div class="layer-label">
+      Backend
+      <span class="layer-subtitle">Go 1.26 · chi router · localhost:8080</span>
+    </div>
+
+    <div class="box-grid box-grid-4">
+
+      <div class="box">
+        <div class="box-title">FactoryHandler</div>
+        <ul>
+          <li>GET /api/factories</li>
+          <li>GET /api/factories/{id}/machines</li>
+        </ul>
+        <span class="tag tag-be">factories.go</span>
+      </div>
+
+      <div class="box">
+        <div class="box-title">TemplateHandler</div>
+        <ul>
+          <li>GET /api/metrics</li>
+          <li>GET · POST /api/templates</li>
+          <li>GET · PUT · DELETE /api/templates/{id}</li>
+          <li style="color:#484f58">409 if template in use</li>
+        </ul>
+        <span class="tag tag-be">templates.go</span>
+      </div>
+
+      <div class="box">
+        <div class="box-title">DashboardHandler</div>
+        <ul>
+          <li>GET · POST /api/dashboards</li>
+          <li>GET · DELETE /api/dashboards/{id}</li>
+          <li style="color:#484f58">transaction: dashboard + pages</li>
+        </ul>
+        <span class="tag tag-be">dashboards.go</span>
+      </div>
+
+      <div class="box">
+        <div class="box-title">TelemetryHandler</div>
+        <ul>
+          <li>GET /api/machines/{id}/telemetry</li>
+          <li style="color:#484f58">no DB read — sine wave</li>
+          <li style="color:#484f58">seeded by fnv32a(machineID:key)</li>
+          <li style="color:#484f58">output = uptime counter</li>
+        </ul>
+        <span class="tag tag-be">telemetry.go</span>
+      </div>
+
+    </div>
+
+    <div class="box" style="margin-top:10px;">
+      <div class="box-title">Shared</div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">Models (models.go)</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="tag">Factory</span>
+            <span class="tag">Machine</span>
+            <span class="tag">Template</span>
+            <span class="tag">Widget</span>
+            <span class="tag">WidgetElement</span>
+            <span class="tag">Dashboard</span>
+            <span class="tag">DashboardPage</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">Fixed metric catalog (metrics.go)</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="tag">temperature</span>
+            <span class="tag">pressure</span>
+            <span class="tag">speed</span>
+            <span class="tag">vibration</span>
+            <span class="tag">output</span>
+            <span class="tag">status</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:4px;">Router (router.go)</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <span class="tag">chi</span>
+            <span class="tag">Logger</span>
+            <span class="tag">Recoverer</span>
+            <span class="tag">CORS *</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARROW -->
+  <div class="layer-arrow">
+    <span>database/sql · modernc.org/sqlite (pure Go, no CGO)</span>
+  </div>
+
+  <!-- DATABASE LAYER -->
+  <div class="layer layer-db">
+    <div class="layer-label">
+      Database
+      <span class="layer-subtitle">SQLite · WAL mode · FK on · MaxOpenConns(1)</span>
+    </div>
+
+    <div class="box-grid box-grid-2">
+      <div class="box">
+        <div class="box-title">Tables</div>
+        <div class="db-tables">
+          <span class="db-table-chip">factories</span>
+          <span class="db-table-chip">machines</span>
+          <span class="db-table-chip">templates</span>
+          <span class="db-table-chip">dashboards</span>
+          <span class="db-table-chip">dashboard_pages</span>
+        </div>
+        <p class="inline-note" style="margin-top:8px;">templates stores widgets as widgets_json TEXT (JSON array)</p>
+      </div>
+      <div class="box">
+        <div class="box-title">Startup sequence</div>
+        <ul>
+          <li>db.go: open → WAL pragma → FK pragma → MaxOpenConns(1)</li>
+          <li>migrate.go: CREATE TABLE IF NOT EXISTS (ordered slice)</li>
+          <li>seed.go: one-time seed when factories is empty</li>
+          <li style="color:#484f58">3 factories · 11 machines · 1 starter template</li>
+        </ul>
+        <span class="tag tag-db">./data/dashboard-builder.db</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 2 — DATA FLOW
+════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">2 · Data Flow</div>
+
+  <div class="flows">
+
+    <!-- FLOW 1: Template CRUD -->
+    <div class="flow">
+      <div class="flow-header">
+        <div class="flow-num flow-num-1">1</div>
+        <div class="flow-title">Template Create / Edit</div>
+        <div class="flow-desc">TemplateEditorPage → template.store → api.ts → TemplateHandler → SQLite</div>
+      </div>
+      <div class="flow-steps">
+
+        <div class="step">
+          <div class="step-box step-box-usr">User</div>
+          <div class="step-sub">edits widget canvas</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">triggers</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-fe">TemplateEditorPage</div>
+          <div class="step-sub">validates widget types & sizes</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">calls</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-fe">template.store</div>
+          <div class="step-sub">Pinia</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">api.ts</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-fe">POST /api/templates</div>
+          <div class="step-sub">JSON body</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">validates</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-be">TemplateHandler</div>
+          <div class="step-sub">templateInput.validate()</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">INSERT</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-db">templates</div>
+          <div class="step-sub">widgets_json TEXT</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- FLOW 2: Dashboard Creation -->
+    <div class="flow">
+      <div class="flow-header">
+        <div class="flow-num flow-num-2">2</div>
+        <div class="flow-title">Dashboard Creation (4-step wizard)</div>
+        <div class="flow-desc">CreateDashboardPage → dashboard.store → POST /api/dashboards → tx: dashboard + pages</div>
+      </div>
+      <div class="flow-steps">
+
+        <div class="step">
+          <div class="step-box step-box-usr">User</div>
+          <div class="step-sub">step 1: pick template</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="24" height="12"><line x1="0" y1="6" x2="20" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="20,3 24,6 20,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">→</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-fe">step 2</div>
+          <div class="step-sub">pick factory</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="24" height="12"><line x1="0" y1="6" x2="20" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="20,3 24,6 20,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">→</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-fe">step 3</div>
+          <div class="step-sub">select machines</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="24" height="12"><line x1="0" y1="6" x2="20" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="20,3 24,6 20,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">→</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-fe">step 4 review</div>
+          <div class="step-sub">confirm &amp; submit</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">dashboard.store</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-fe">POST /api/dashboards</div>
+          <div class="step-sub">{templateId, factoryId, machineIds[]}</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">validates + tx</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-be">DashboardHandler</div>
+          <div class="step-sub">machines ∈ factory check</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">INSERT tx</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-db">dashboards +<br>dashboard_pages</div>
+          <div class="step-sub">one row per machine</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- FLOW 3: Telemetry polling -->
+    <div class="flow">
+      <div class="flow-header">
+        <div class="flow-num flow-num-3">3</div>
+        <div class="flow-title">Telemetry Polling (live view)</div>
+        <div class="flow-desc">DashboardViewPage mounts → useTelemetry polls every 2 s — no DB read, pure computation</div>
+      </div>
+      <div class="flow-steps">
+
+        <div class="step">
+          <div class="step-box step-box-usr">DashboardViewPage</div>
+          <div class="step-sub">tab = current page/machine</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">onMounted</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-fe">useTelemetry</div>
+          <div class="step-sub">setInterval 2 000 ms</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">api.ts</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-fe">GET /api/machines/{id}/telemetry</div>
+          <div class="step-sub">per machine</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">computes</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-be">TelemetryHandler</div>
+          <div class="step-sub">sin(t · freq + fnv32a seed)<br>output = uptime counter</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">{ key: value }</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-fe">useTelemetry</div>
+          <div class="step-sub">rolling history[metric] = last 30 pts</div>
+        </div>
+        <div class="step-arrow-label">
+          <div class="arrow-line"><svg width="32" height="12"><line x1="0" y1="6" x2="28" y2="6" stroke="#484f58" stroke-width="1.5"/><polygon points="28,3 32,6 28,9" fill="#484f58"/></svg></div>
+          <div class="arrow-text">reactive refs</div>
+        </div>
+
+        <div class="step">
+          <div class="step-box step-box-fe">WidgetRenderer</div>
+          <div class="step-sub">GaugeWidget · LineChartWidget<br>KpiWidget · StatusWidget · Table</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 3 — API REFERENCE
+════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">3 · API Reference</div>
+  <div class="table-wrapper">
+    <table class="api-table">
+      <thead>
+        <tr>
+          <th>Method</th>
+          <th>Route</th>
+          <th>Handler</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="method GET">GET</span></td>
+          <td class="route-path">/api/health</td>
+          <td>inline</td>
+          <td style="color:var(--muted)">{"status":"ok"}</td>
+        </tr>
+        <tr>
+          <td><span class="method GET">GET</span></td>
+          <td class="route-path">/api/factories</td>
+          <td>FactoryHandler.List</td>
+          <td style="color:var(--muted)">returns all factories</td>
+        </tr>
+        <tr>
+          <td><span class="method GET">GET</span></td>
+          <td class="route-path">/api/factories/<em>{id}</em>/machines</td>
+          <td>FactoryHandler.ListMachines</td>
+          <td style="color:var(--muted)">machines belonging to factory</td>
+        </tr>
+        <tr>
+          <td><span class="method GET">GET</span></td>
+          <td class="route-path">/api/metrics</td>
+          <td>TemplateHandler.Metrics</td>
+          <td style="color:var(--muted)">fixed catalog: 6 metrics with key/label/unit/min/max</td>
+        </tr>
+        <tr>
+          <td><span class="method GET">GET</span></td>
+          <td class="route-path">/api/templates</td>
+          <td>TemplateHandler.List</td>
+          <td style="color:var(--muted)"></td>
+        </tr>
+        <tr>
+          <td><span class="method POST">POST</span></td>
+          <td class="route-path">/api/templates</td>
+          <td>TemplateHandler.Create</td>
+          <td style="color:var(--muted)">validates widget types (gauge|line|kpi|status|table) + sizes</td>
+        </tr>
+        <tr>
+          <td><span class="method GET">GET</span></td>
+          <td class="route-path">/api/templates/<em>{id}</em></td>
+          <td>TemplateHandler.Get</td>
+          <td style="color:var(--muted)">includes parsed widgets array</td>
+        </tr>
+        <tr>
+          <td><span class="method PUT">PUT</span></td>
+          <td class="route-path">/api/templates/<em>{id}</em></td>
+          <td>TemplateHandler.Update</td>
+          <td style="color:var(--muted)"></td>
+        </tr>
+        <tr>
+          <td><span class="method DELETE">DELETE</span></td>
+          <td class="route-path">/api/templates/<em>{id}</em></td>
+          <td>TemplateHandler.Delete</td>
+          <td style="color:var(--muted)">409 if template is used by a dashboard</td>
+        </tr>
+        <tr>
+          <td><span class="method GET">GET</span></td>
+          <td class="route-path">/api/dashboards</td>
+          <td>DashboardHandler.List</td>
+          <td style="color:var(--muted)"></td>
+        </tr>
+        <tr>
+          <td><span class="method POST">POST</span></td>
+          <td class="route-path">/api/dashboards</td>
+          <td>DashboardHandler.Create</td>
+          <td style="color:var(--muted)">validates template+factory exist; all machines ∈ factory; inserts in tx</td>
+        </tr>
+        <tr>
+          <td><span class="method GET">GET</span></td>
+          <td class="route-path">/api/dashboards/<em>{id}</em></td>
+          <td>DashboardHandler.Get</td>
+          <td style="color:var(--muted)">includes template, factory, pages with machine objects</td>
+        </tr>
+        <tr>
+          <td><span class="method DELETE">DELETE</span></td>
+          <td class="route-path">/api/dashboards/<em>{id}</em></td>
+          <td>DashboardHandler.Delete</td>
+          <td style="color:var(--muted)"></td>
+        </tr>
+        <tr>
+          <td><span class="method GET">GET</span></td>
+          <td class="route-path">/api/machines/<em>{id}</em>/telemetry</td>
+          <td>TelemetryHandler.Get</td>
+          <td style="color:var(--muted)">no DB read; sine-wave simulation seeded by fnv32a(machineID:metricKey)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     SECTION 4 — COMPARISON: dashboard-builder vs customizable-for-nong-chaai
+════════════════════════════════════════════════ -->
+<div class="section">
+  <div class="section-title">4 · Comparison — dashboard-builder vs customizable-for-nong-chaai</div>
+
+  <div style="overflow-x:auto;">
+    <table class="api-table" style="min-width:700px;">
+      <thead>
+        <tr>
+          <th style="width:20%;">Dimension</th>
+          <th style="width:40%;">dashboard-builder <span style="color:var(--fe);font-weight:400;">(this repo)</span></th>
+          <th style="width:40%;">customizable-for-nong-chaai</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Purpose</td>
+          <td>Design widget templates, pick a factory + machines, generate a monitoring dashboard with simulated telemetry</td>
+          <td>Register physical target-board devices, build templates, rotate dashboard playlists on factory floor screens</td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Backend</td>
+          <td>
+            <strong>Self-contained Go 1.26 server</strong> (chi, SQLite) — ships both API and data<br>
+            <span class="tag tag-be">:8080</span>
+          </td>
+          <td>
+            <strong>Frontend-only</strong> — connects to multiple external Go backends:<br>
+            · <span class="tag">openrte.com</span> (auth, target boards, templates)<br>
+            · <span class="tag">:8005</span> mahachai factory gateway<br>
+            · <span class="tag">:8007</span> nongchok2 factory gateway<br>
+            Proxy order in vite.config matters (specific paths before catch-alls)
+          </td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Auth</td>
+          <td><span style="color:var(--muted);">None</span> — open access, no login</td>
+          <td>
+            <strong>JWT</strong> (JwtService) stored in localStorage<br>
+            401 → clear JWT + <code>factory_selected</code> → redirect <code>/sign-in</code><br>
+            <code>hasPermission()</code> guard on routes
+          </td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Data source</td>
+          <td>
+            <strong>Simulated only</strong> — TelemetryHandler computes sine waves in-process<br>
+            <span style="color:var(--muted);font-size:11px;">seeded by fnv32a(machineID:metricKey) → reproducible but fake</span>
+          </td>
+          <td>
+            <strong>Real IoT data</strong> via factory gateway (<code>factoryApi</code> wrapper)<br>
+            Also reads <code>init_config.boards[]</code> for per-line machine/SKU/target config<br>
+            <span style="color:var(--muted);font-size:11px;">axios-retry: 3 retries, exponential backoff on network / 5xx</span>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Device concept</td>
+          <td><span style="color:var(--muted);">None</span> — browser is the only client</td>
+          <td>
+            <strong>Physical target boards</strong> registered with a 24-char UUID<br>
+            UUID = SHA-256 of browser fingerprint (clientjs) → persisted to localStorage<br>
+            Polls <code>GET /target_board/unique_id/:uuid</code> until resolved<br>
+            <code>device.store</code> owns the registration flow
+          </td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Rendering pipeline</td>
+          <td>
+            <strong>2 layers:</strong><br>
+            DashboardViewPage → <strong>WidgetRenderer</strong> (dispatches by widget.type)<br>
+            <span style="color:var(--muted);font-size:11px;">one machine per page tab; telemetry injected via useTelemetry</span>
+          </td>
+          <td>
+            <strong>3 layers:</strong><br>
+            <strong>DashboardRotator</strong> → cycles playlist (duration_seconds, transition_effect)<br>
+            &nbsp;&nbsp;<strong>DashboardEngine</strong> (Smart Parent) → fetches data_sources, scales canvas fit-to-screen, resolves apiProfile URL overrides<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<strong>WidgetRenderer</strong> (Dumb Child) → renders Widget list
+          </td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Template model</td>
+          <td>
+            <code>Template { Widgets[]Widget }</code> — flat list, stored as <code>widgets_json TEXT</code><br>
+            Widget has <code>x/y/w/h</code> as % of canvas (0-100), optional Elements[] for sub-layout<br>
+            Fixed canvas: <code>width/height/gridCols/gridRows</code>
+          </td>
+          <td>
+            <code>Template { layout_config: LayoutConfig }</code> stored as JSONB<br>
+            <code>mode: 'grid' | 'canvas'</code> — two rendering modes<br>
+            Widgets have <code>data_key / data_expression</code> for data binding<br>
+            <code>data_sources[]</code> + <code>refresh_interval_ms</code> on the template itself<br>
+            Playlist: <code>DeviceInfoTargetBoard → TemplateMonitor[]</code> with per-item duration
+          </td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Widget types</td>
+          <td>
+            Generic monitoring widgets:<br>
+            <span class="tag">gauge</span> <span class="tag">line</span> <span class="tag">kpi</span> <span class="tag">status</span> <span class="tag">table</span> <span class="tag">bar</span>
+          </td>
+          <td>
+            Domain-specific production widgets:<br>
+            <span class="tag">TargetCard</span> <span class="tag">ActualCard</span> <span class="tag">BalanceCard</span> <span class="tag">NumberCard</span><br>
+            <span class="tag">TargetHeader</span> <span class="tag">TargetFooter</span> <span class="tag">ProgressBar</span><br>
+            <span class="tag">StatusLight</span> <span class="tag">Clock</span> <span class="tag">Text</span>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Template editor</td>
+          <td>
+            Custom % -based canvas editor (TemplateEditorPage)<br>
+            WidgetEditorShell + WidgetElementEditor<br>
+            <span style="color:var(--muted);font-size:11px;">no external grid library</span>
+          </td>
+          <td>
+            <strong>gridstack</strong> for drag-and-resize layout<br>
+            Editor components in <code>components/monitors/editor/</code>:<br>
+            ColorPicker, BigSlider, NudgePad, ElementChip, NumberStepper
+          </td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Pinia stores</td>
+          <td>
+            <span class="tag">catalog.store</span> — factories, machines, metrics (fetch-once)<br>
+            <span class="tag">template.store</span><br>
+            <span class="tag">dashboard.store</span>
+          </td>
+          <td>
+            <span class="tag">auth.ts</span> — JWT, verifyAuth() (deduped), factory selection<br>
+            <span class="tag">device.ts</span> — UUID fingerprint + polling<br>
+            <span class="tag">factory.ts</span> — selected factory (overlaps with auth.ts — check which view reads which)<br>
+            <span class="tag">config.ts</span> <span class="tag">body.ts</span> <span class="tag">theme.ts</span> — Metronic layout
+          </td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">UI framework</td>
+          <td>Bootstrap 5 + Bootstrap Icons · Chart.js via vue-chartjs</td>
+          <td>Metronic (Bootstrap 5 admin theme) · amCharts 5 · SweetAlert2 dialogs · vue-i18n (en + TH strings)</td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">API service</td>
+          <td>
+            <code>src/services/api.ts</code> — plain axios, <code>baseURL: '/api'</code><br>
+            <span style="color:var(--muted);font-size:11px;">no retry, no global error handler</span>
+          </td>
+          <td>
+            <code>ApiService.ts</code> — axios singleton, registered as <code>window.ApiService</code> in dev<br>
+            axios-retry (3×, exponential) · global 5xx/network → SweetAlert2 dialog · 401 → clear JWT + redirect
+          </td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Router</td>
+          <td>
+            <code>src/router/index.ts</code> — single source of truth, 5 routes
+          </td>
+          <td>
+            <code>router/openrte.ts</code> — live router (wired in main.ts)<br>
+            <code>router/index.ts</code> + <code>clean.ts</code> — unused Metronic demo; don't assume reachable<br>
+            Route config centralized in <code>factoryRoutes.config.ts</code> (auth/permission/requiresUuid meta)
+          </td>
+        </tr>
+
+        <tr>
+          <td style="color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;">Scope / maturity</td>
+          <td>
+            <strong>Prototype / builder tool</strong><br>
+            Self-contained, no auth, simulated data<br>
+            Good for: designing templates and flow offline
+          </td>
+          <td>
+            <strong>Production system</strong><br>
+            JWT auth, real factory data, physical device management<br>
+            Multi-factory routing, retry logic, i18n, playlist rotation<br>
+            Carries Metronic boilerplate — many <code>src/views/apps/</code> files unused
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</body>
+</html>
