@@ -12,7 +12,7 @@ const props = defineProps<{
 const statusStyle = computed(() => {
   const v = (props.value as string | undefined)?.toLowerCase() ?? ''
   let bg = '#64748b'
-  if (v === 'running') bg = '#2d8470'
+  if (v === 'running') bg = 'var(--db-success)'
   else if (v === 'stopped' || v === 'error') bg = 'var(--db-danger)'
   else if (v === 'idle') bg = 'var(--db-warning)'
   return { backgroundColor: bg, boxShadow: `0 0 8px ${bg}` }

@@ -18,12 +18,6 @@ const percent = computed(() => {
   return Math.min(100, Math.max(0, pct))
 })
 
-const colorClass = computed(() => {
-  if (percent.value >= 90) return 'bg-danger'
-  if (percent.value >= 70) return 'bg-warning'
-  return 'bg-success'
-})
-
 function formatNumber(value: number): string {
   return value.toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
@@ -53,7 +47,6 @@ function formatNumber(value: number): string {
               <div class="progress gauge-track db-track w-100">
                 <div
                   class="progress-bar db-bar"
-                  :class="colorClass"
                   role="progressbar"
                   :style="{ width: percent + '%' }"
                   :aria-valuenow="value ?? 0"
@@ -82,7 +75,6 @@ function formatNumber(value: number): string {
         <div class="progress gauge-track db-track">
           <div
             class="progress-bar db-bar"
-            :class="colorClass"
             role="progressbar"
             :style="{ width: percent + '%' }"
             :aria-valuenow="value ?? 0"
@@ -134,7 +126,7 @@ function formatNumber(value: number): string {
 }
 
 .db-bar {
-  background-color: var(--db-accent);
+  background-color: var(--db-accent) !important;
   transition: width 0.4s ease;
 }
 </style>

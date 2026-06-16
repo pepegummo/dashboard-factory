@@ -2,13 +2,13 @@
   /* Dashboard dark-theme palette — shared by all widget components */
   --db-bg:        #0a0e1a;   /* near-black canvas background */
   --db-card-bg:   #111827;   /* widget card background */
-  --db-card-bg2:  #1a2236;   /* slightly lighter card variant */
   --db-border:    rgba(255, 255, 255, 0.08);
   --db-border-glow: rgba(0, 210, 255, 0.18);
   --db-text:      #e2e8f0;   /* primary text */
   --db-text-muted: #64748b;  /* muted/label text */
   --db-accent:    #00d2ff;   /* cyan accent — dots, highlights */
   --db-accent2:   #50cd89;   /* green accent — success / KPI */
+  --db-success:   #2d8470;   /* running / ok state */
   --db-danger:    #e74c3c;
   --db-warning:   #f1970f;
 }
