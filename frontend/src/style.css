@@ -1,0 +1,417 @@
+:root {
+  color-scheme: light;
+}
+
+body {
+  background-color: #f4f6f9;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-content {
+  flex: 1;
+  padding: 1.5rem;
+}
+
+.page-content-standalone {
+  padding: 0.5rem;
+}
+
+.widget-card {
+  height: 100%;
+}
+
+.widget-card .card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.widget-title {
+  font-size: 0.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.kpi-value {
+  font-size: clamp(0.9rem, 16cqmin, 2.25rem);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.kpi-unit {
+  font-size: 0.5em;
+}
+
+.gauge-value {
+  font-size: clamp(0.8rem, 13cqmin, 1.5rem);
+  font-weight: 600;
+}
+
+.gauge-unit {
+  font-size: 0.6em;
+}
+
+.gauge-track {
+  height: clamp(0.4rem, 6cqh, 0.75rem);
+  border-radius: 999px;
+}
+
+.status-badge {
+  font-size: clamp(0.7rem, 14cqmin, 1.25rem);
+  padding: 0.35em 0.75em;
+}
+
+.chart-container {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+
+.widget-table {
+  font-size: 0.875rem;
+}
+
+/* Shrink widget chrome as the cell itself gets small, so titles/values stay
+   in scale instead of overflowing tiny dashboard cells. Scoped to the
+   widget-cell container set on .dashboard-canvas-item below. Each breakpoint
+   is duplicated for max-width/max-height since lightningcss rejects
+   comma-separated @container conditions. */
+@container widget-cell (max-width: 170px) {
+  .widget-card .card-body {
+    padding: 0.5rem;
+  }
+
+  .widget-title {
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .gauge-minmax {
+    font-size: 0.65rem;
+  }
+
+  .widget-table {
+    font-size: 0.75rem;
+  }
+
+  .widget-table td {
+    padding: 0.15rem 0.3rem;
+  }
+}
+
+@container widget-cell (max-height: 110px) {
+  .widget-card .card-body {
+    padding: 0.5rem;
+  }
+
+  .widget-title {
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .gauge-minmax {
+    font-size: 0.65rem;
+  }
+
+  .widget-table {
+    font-size: 0.75rem;
+  }
+
+  .widget-table td {
+    padding: 0.15rem 0.3rem;
+  }
+}
+
+@container widget-cell (max-width: 110px) {
+  .widget-card .card-body {
+    padding: 0.35rem;
+  }
+
+  .widget-title {
+    font-size: 0.65rem;
+    margin-bottom: 0.1rem;
+  }
+
+  .gauge-minmax {
+    display: none;
+  }
+
+  .widget-table {
+    font-size: 0.65rem;
+  }
+
+  .widget-table td {
+    padding: 0.05rem 0.25rem;
+  }
+}
+
+@container widget-cell (max-height: 60px) {
+  .widget-card .card-body {
+    padding: 0.35rem;
+  }
+
+  .widget-title {
+    font-size: 0.65rem;
+    margin-bottom: 0.1rem;
+  }
+
+  .gauge-minmax {
+    display: none;
+  }
+
+  .widget-table {
+    font-size: 0.65rem;
+  }
+
+  .widget-table td {
+    padding: 0.05rem 0.25rem;
+  }
+}
+
+.template-builder-list .list-group-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cursor-pointer {
+  cursor: pointer;
+}
+
+.grid-stack {
+  background-color: #eef1f5;
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  min-height: 200px;
+}
+
+.template-canvas {
+  position: relative;
+  /* Cap the preview to ~70% of the viewport height: width shrinks below
+     100% for square/portrait canvases so height (set via aspect-ratio)
+     never exceeds 70vh, instead of growing as tall as the board is wide. */
+  width: min(100%, calc(70vh * var(--canvas-ratio, 1)));
+  margin: 0 auto;
+}
+
+.template-canvas .grid-stack {
+  width: 100%;
+  height: 100%;
+  background-origin: content-box;
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      rgba(0, 0, 0, 0.07) 0,
+      rgba(0, 0, 0, 0.07) 1px,
+      transparent 1px,
+      transparent calc(100% / var(--board-cols, 10))
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.07) 0,
+      rgba(0, 0, 0, 0.07) 1px,
+      transparent 1px,
+      transparent calc(100% / var(--board-rows, 10))
+    );
+}
+
+.dashboard-canvas {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+  background-color: #eef1f5;
+  border-radius: 0.375rem;
+}
+
+.dashboard-canvas-item {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 0.25rem;
+  container-type: size;
+  container-name: widget-cell;
+  overflow: hidden;
+}
+
+.dashboard-canvas-item > * {
+  height: 100%;
+}
+
+.grid-stack-item-content .widget-card {
+  height: 100%;
+  cursor: pointer;
+}
+
+/* WidgetEditorShell */
+.widget-editor-shell {
+  position: relative;
+  height: 100%;
+}
+
+.widget-shell-toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  background: rgba(13, 110, 253, 0.88);
+  border-radius: 4px 4px 0 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 30;
+}
+
+.widget-editor-shell:hover .widget-shell-toolbar,
+.widget-editor-shell.is-selected .widget-shell-toolbar {
+  opacity: 1;
+  pointer-events: all;
+}
+
+.drag-handle {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  cursor: grab;
+  flex-shrink: 0;
+  padding: 0 1px;
+  line-height: 1;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.widget-shell-title {
+  flex: 1;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-shell-config,
+.btn-shell-remove {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 11px;
+  padding: 0 3px;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.btn-shell-config:hover {
+  color: #fff;
+}
+
+.btn-shell-remove:hover {
+  color: #fca5a5;
+}
+
+/* WidgetElementEditor overlay */
+.widget-element-editor-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.element-handle {
+  position: absolute;
+  border: 1px dashed #0d6efd;
+  background: rgba(13, 110, 253, 0.07);
+  box-sizing: border-box;
+}
+
+.element-drag-body {
+  position: absolute;
+  inset: 0;
+  cursor: move;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.element-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #0d6efd;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 1px 5px;
+  border-radius: 3px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.element-resize-se {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 14px;
+  height: 14px;
+  cursor: se-resize;
+  background: #0d6efd;
+  border-radius: 3px 0 0 0;
+  z-index: 1;
+}
+
+/* KPI widget — elements-based canvas */
+.kpi-elements-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.kpi-element-cell {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.widget-editor-shell.is-selected .widget-card {
+  outline: 2px solid #0d6efd;
+  outline-offset: -2px;
+}
+
+.widget-shell-resize-corner {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid #0d6efd;
+  border-bottom: 2px solid #0d6efd;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+  z-index: 5;
+}
+
+.widget-editor-shell:hover .widget-shell-resize-corner,
+.widget-editor-shell.is-selected .widget-shell-resize-corner {
+  opacity: 0.55;
+}
+
+.page-dot {
+  width: 0.75rem;
+  height: 0.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: #ced4da;
+  transition: background-color 0.2s ease;
+}
+
+.page-dot.active {
+  background-color: #0d6efd;
+}

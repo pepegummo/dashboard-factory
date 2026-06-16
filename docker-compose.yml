@@ -1,0 +1,20 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    volumes:
+      - backend-data:/data
+    environment:
+      - DB_PATH=/data/dashboard-builder.db
+      - PORT=8080
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5174:80"
+    depends_on:
+      - backend
+
+volumes:
+  backend-data:
