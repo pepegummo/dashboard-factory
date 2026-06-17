@@ -72,7 +72,7 @@ function formatValue(value: number | string | null | undefined): string {
 }
 
 .db-value {
-  color: #ffffff !important;
+  color: var(--db-text) !important;
   font-weight: 700;
   line-height: 1.05;
   letter-spacing: -0.01em;

@@ -726,7 +726,7 @@ async function save() {
       <!-- Canvas main area -->
       <main class="editor-main">
         <div class="card shadow-sm h-100">
-          <div class="card-header bg-white d-flex justify-content-between align-items-center py-2">
+          <div class="card-header d-flex justify-content-between align-items-center py-2">
             <strong>Board</strong>
             <span class="text-muted small">Click widget to select — hover elements to highlight, click to configure, Esc to deselect</span>
           </div>
@@ -790,7 +790,7 @@ async function save() {
 .editor-page-header {
   padding: 1rem 1.5rem 0.75rem;
   border-bottom: 1px solid var(--bs-border-color);
-  background: #fff;
+  background: var(--bs-body-bg);
   flex-shrink: 0;
 }
 
@@ -805,7 +805,7 @@ async function save() {
 .editor-sidebar {
   width: 280px;
   min-width: 280px;
-  background: #fff;
+  background: var(--bs-body-bg);
   border-right: 1px solid var(--bs-border-color);
   display: flex;
   flex-direction: column;
@@ -972,7 +972,7 @@ async function save() {
 .editor-sidebar-footer {
   padding: 0.75rem 1rem;
   border-top: 1px solid var(--bs-border-color);
-  background: #fff;
+  background: var(--bs-body-bg);
   flex-shrink: 0;
 }
 
@@ -981,7 +981,7 @@ async function save() {
   flex: 1;
   overflow: auto;
   padding: 1rem;
-  background: #f4f6f9;
+  background: var(--bs-secondary-bg);
   display: flex;
   flex-direction: column;
 }

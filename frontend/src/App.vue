@@ -1,7 +1,27 @@
 <script setup lang="ts">
+import { ref, watch, watchEffect, onMounted, onUnmounted } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 
 const route = useRoute()
+
+type Mode = 'system' | 'light' | 'dark'
+const mode = ref<Mode>((localStorage.getItem('theme') as Mode) ?? 'system')
+let mq: MediaQueryList
+
+function apply(m: Mode) {
+  const resolved = m === 'system' ? (mq?.matches ? 'dark' : 'light') : m
+  document.documentElement.setAttribute('data-bs-theme', resolved)
+}
+
+watch(mode, m => localStorage.setItem('theme', m))
+
+onMounted(() => {
+  mq = window.matchMedia('(prefers-color-scheme: dark)')
+  mq.addEventListener('change', () => { if (mode.value === 'system') apply('system') })
+  apply(mode.value)
+})
+onUnmounted(() => mq.removeEventListener('change', () => {}))
+watchEffect(() => apply(mode.value))
 </script>
 
 <template>
@@ -40,6 +60,11 @@ const route = useRoute()
               </RouterLink>
             </li>
           </ul>
+          <select v-model="mode" class="form-select form-select-sm w-auto me-2">
+            <option value="system">System</option>
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+          </select>
           <RouterLink class="btn btn-primary" to="/create">
             <i class="bi bi-plus-lg me-1"></i>New Dashboard
           </RouterLink>

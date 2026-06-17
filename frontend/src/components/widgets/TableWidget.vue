@@ -110,6 +110,6 @@ function formatValue(key: string, value: number | string | undefined): string {
 }
 
 .db-td-value {
-  color: #ffffff;
+  color: var(--db-text);
 }
 </style>

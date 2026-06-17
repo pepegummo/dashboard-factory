@@ -109,7 +109,7 @@ function formatNumber(value: number): string {
 }
 
 .db-value {
-  color: #ffffff !important;
+  color: var(--db-text) !important;
   font-weight: 700;
 }
 

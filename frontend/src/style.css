@@ -1,20 +1,28 @@
 :root {
-  /* Dashboard dark-theme palette — shared by all widget components */
-  --db-bg:        #0a0e1a;   /* near-black canvas background */
-  --db-card-bg:   #111827;   /* widget card background */
+  --db-bg:        #0a0e1a;
+  --db-card-bg:   #111827;
   --db-border:    rgba(255, 255, 255, 0.08);
   --db-border-glow: rgba(0, 210, 255, 0.18);
-  --db-text:      #e2e8f0;   /* primary text */
-  --db-text-muted: #64748b;  /* muted/label text */
-  --db-accent:    #00d2ff;   /* cyan accent — dots, highlights */
-  --db-accent2:   #50cd89;   /* green accent — success / KPI */
-  --db-success:   #2d8470;   /* running / ok state */
+  --db-text:      #e2e8f0;
+  --db-text-muted: #64748b;
+  --db-accent:    #00d2ff;
+  --db-accent2:   #50cd89;
+  --db-success:   #2d8470;
   --db-danger:    #e74c3c;
   --db-warning:   #f1970f;
 }
 
+[data-bs-theme="light"] {
+  --db-bg:        #e8edf3;
+  --db-card-bg:   #ffffff;
+  --db-border:    rgba(0, 0, 0, 0.1);
+  --db-border-glow: rgba(0, 0, 0, 0);
+  --db-text:      #1e293b;
+  --db-text-muted: #64748b;
+}
+
 body {
-  background-color: #f4f6f9;
+  background-color: var(--bs-secondary-bg);
 }
 
 .app-shell {
@@ -193,7 +201,7 @@ body {
 }
 
 .grid-stack {
-  background-color: #eef1f5;
+  background-color: var(--bs-tertiary-bg);
   border-radius: 0.375rem;
   padding: 0.5rem;
   min-height: 200px;
@@ -212,21 +220,22 @@ body {
   width: 100%;
   height: 100%;
   background-origin: content-box;
+  --grid-line: rgba(0, 0, 0, 0.07);
   background-image:
     repeating-linear-gradient(
       to right,
-      rgba(0, 0, 0, 0.07) 0,
-      rgba(0, 0, 0, 0.07) 1px,
-      transparent 1px,
-      transparent calc(100% / var(--board-cols, 10))
+      var(--grid-line) 0, var(--grid-line) 1px,
+      transparent 1px, transparent calc(100% / var(--board-cols, 10))
     ),
     repeating-linear-gradient(
       to bottom,
-      rgba(0, 0, 0, 0.07) 0,
-      rgba(0, 0, 0, 0.07) 1px,
-      transparent 1px,
-      transparent calc(100% / var(--board-rows, 10))
+      var(--grid-line) 0, var(--grid-line) 1px,
+      transparent 1px, transparent calc(100% / var(--board-rows, 10))
     );
+}
+
+[data-bs-theme="dark"] .template-canvas .grid-stack {
+  --grid-line: rgba(255, 255, 255, 0.08);
 }
 
 .dashboard-canvas {
