@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { ChatMessage } from '@/types'
 import { api, apiErrorMessage } from '@/services/api'
 
 const props = defineProps<{ context: string; prefill?: string }>()
 const emit = defineEmits<{ highlight: [indices: number[]] }>()
 
 const question = ref('')
+const messages = ref<ChatMessage[]>([])
 
 watch(
   () => props.prefill,
@@ -15,18 +17,26 @@ const answer = ref('')
 const loading = ref(false)
 const errorMsg = ref('')
 
+watch(
+  () => props.context,
+  () => { messages.value = []; answer.value = '' },
+)
+
 async function submit() {
   const q = question.value.trim()
   if (!q || loading.value) return
   loading.value = true
   errorMsg.value = ''
   question.value = ''
+  messages.value.push({ role: 'user', content: q })
   try {
-    const { reply } = await api.chat([{ role: 'user', content: q }], props.context)
+    const { reply } = await api.chat(messages.value, props.context)
+    messages.value.push({ role: 'assistant', content: reply })
     answer.value = reply
     const indices = [...reply.matchAll(/\[(\d+)\]/g)].map((m) => parseInt(m[1]))
     emit('highlight', [...new Set(indices)])
   } catch (err) {
+    messages.value.pop() // remove the user message that failed
     errorMsg.value = apiErrorMessage(err, 'Failed to get answer')
   } finally {
     loading.value = false
