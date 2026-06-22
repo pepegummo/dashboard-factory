@@ -4,7 +4,10 @@ import type { ChatMessage } from '@/types'
 import { api, apiErrorMessage } from '@/services/api'
 
 const props = defineProps<{ context: string; resetKey?: string; prefill?: string }>()
-const emit = defineEmits<{ highlight: [indices: number[]] }>()
+const emit = defineEmits<{
+  highlight: [indices: number[]]
+  focus: [el: { widgetIndex: number; key: string } | null]
+}>()
 
 const question = ref('')
 const messages = ref<ChatMessage[]>([])
@@ -22,6 +25,14 @@ watch(
   () => { messages.value = []; answer.value = ''; errorMsg.value = '' },
 )
 
+function clear() {
+  messages.value = []
+  answer.value = ''
+  errorMsg.value = ''
+  emit('highlight', [])
+  emit('focus', null)
+}
+
 async function submit() {
   const q = question.value.trim()
   if (!q || loading.value) return
@@ -33,8 +44,10 @@ async function submit() {
     const { reply } = await api.chat(messages.value.slice(-20), props.context)
     messages.value.push({ role: 'assistant', content: reply })
     answer.value = reply
-    const indices = [...reply.matchAll(/\[(\d+)\]/g)].map((m) => parseInt(m[1]))
+    const indices = [...reply.matchAll(/\[(\d+)[^\]]*\]/g)].map((m) => parseInt(m[1]))
     emit('highlight', [...new Set(indices)])
+    const elMatch = reply.match(/\[(\d+)\.(\w+)\]/)
+    emit('focus', elMatch ? { widgetIndex: parseInt(elMatch[1]), key: elMatch[2] } : null)
   } catch (err) {
     messages.value.pop() // remove the user message that failed
     errorMsg.value = apiErrorMessage(err, 'Failed to get answer')
@@ -65,6 +78,9 @@ function onKeydown(e: KeyboardEvent) {
     </div>
 
     <div class="explore-input-row">
+      <button v-if="messages.length" class="explore-clear-btn" title="Clear chat" @click="clear">
+        <i class="bi bi-trash"></i>
+      </button>
       <textarea
         v-model="question"
         class="explore-textarea"
@@ -155,5 +171,21 @@ function onKeydown(e: KeyboardEvent) {
 .explore-send-btn:disabled {
   opacity: 0.4;
   cursor: default;
+}
+
+.explore-clear-btn {
+  background: none;
+  border: 1px solid var(--db-border);
+  border-radius: 0.375rem;
+  color: var(--db-text-muted);
+  padding: 0.5rem 0.625rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.explore-clear-btn:hover {
+  color: var(--bs-danger);
 }
 </style>

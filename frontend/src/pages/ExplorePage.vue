@@ -98,12 +98,19 @@ function buildContext(): string {
     } else {
       dataStr = r !== undefined ? `, live: ${r}${unit}` : ''
     }
-    lines.push(`[${i}] ${w.type} "${w.title}"${range}${dataStr}`)
+    const elKeys = elementsFor(w).map((e) => e.key).join(', ')
+    lines.push(`[${i}] ${w.type} "${w.title}"${range}${dataStr} (elements: ${elKeys})`)
   })
   return lines.join('\n')
 }
 
 const exploreContext = computed(() => buildContext())
+
+function onAiFocus(el: { widgetIndex: number; key: string } | null) {
+  if (!el) { focused.value = null; return }
+  const w = widgets.value[el.widgetIndex]
+  if (w) focused.value = { widgetId: w.id, key: el.key }
+}
 </script>
 
 <template>
@@ -182,6 +189,7 @@ const exploreContext = computed(() => buildContext())
         :reset-key="selectedId + ':' + activePage"
         :prefill="prefillQuestion"
         @highlight="highlightedWidgets = $event"
+        @focus="onAiFocus"
       />
     </div>
 

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -34,13 +35,24 @@ type chatRequest struct {
 const chatSystemPrompt = "You are a helpful assistant for factory operators monitoring a live dashboard. " +
 	"Answer conversationally and warmly — plain language by default, but match the technical depth of the question. " +
 	"For simple questions be brief (1–2 sentences). When asked to explain or compare, give a clear structured answer. " +
-	"Always cite specific widgets as [N: type 'title'] (e.g. [0: status 'Machine Status'], [2: gauge 'Temperature']) when your answer refers to them."
+	"Always cite specific widgets as [N: type 'title'] (e.g. [0: status 'Machine Status'], [2: gauge 'Temperature']) when your answer refers to them. " +
+	"When referring to a specific part of a widget, cite it as [N.key] (e.g. [0.bar], [2.title]) — each widget lists its available element keys in the context."
 
 // buildGroqBody assembles the OpenAI-compatible request payload. The system
 // instruction + dashboard context are prepended as a system message. Split out
 // so the assembly can be checked without a network call.
+func chatTemperature() float64 {
+	if v, err := strconv.ParseFloat(os.Getenv("CHAT_TEMPERATURE"), 64); err == nil {
+		return v
+	}
+	return 0.4
+}
+
 func buildGroqBody(model string, req chatRequest) map[string]any {
 	system := chatSystemPrompt
+	if override := os.Getenv("CHAT_SYSTEM_PROMPT"); override != "" {
+		system = override
+	}
 	if strings.TrimSpace(req.Context) != "" {
 		system += "\n\nDashboard context:\n" + req.Context
 	}
@@ -48,8 +60,9 @@ func buildGroqBody(model string, req chatRequest) map[string]any {
 	messages = append(messages, chatMessage{Role: "system", Content: system})
 	messages = append(messages, req.Messages...)
 	return map[string]any{
-		"model":    model,
-		"messages": messages,
+		"model":            model,
+		"messages":         messages,
+		"temperature":      chatTemperature(),
 		// Qwen3 is a reasoning model; keep its <think> trace out of the reply.
 		"reasoning_format": "hidden",
 	}
